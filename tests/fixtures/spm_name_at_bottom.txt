@@ -1,0 +1,20 @@
+SENIOR PRODUCT MANAGER — PLATFORM & INTEGRATIONS
+
+Pune, India
+
+EXPERIENCE
+Lead Product Manager, ShipStack (logistics SaaS, 40 people) — 2021–present
+- Only product person for 2.5 years; reported to the CTO with no PM above me. Owned roadmap, discovery and delivery.
+- Owned the carrier-integration layer: designed the adapter framework that took us from 6 to 31 carrier APIs; integrations unlocked 3 enterprise contracts worth ₹2.1 Cr ARR.
+- Defined data-quality SLAs for tracking events (95% of events within 5 minutes) and an incident review process the engineering team still runs.
+
+Product Manager, Delhivery — 2018–2021
+- Ran the e-way bill integration with the GST network; reduced manual filing errors by 70%.
+
+Talks: Speaker at ProductCon 2023. AWS Certified.
+
+CONTACT
+Ananya Deshpande
+ananya.d@outlook.com
+098204-37811
+github.com/ananyad
