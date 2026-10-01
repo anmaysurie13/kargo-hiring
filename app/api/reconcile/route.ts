@@ -18,7 +18,7 @@ export async function POST() {
   const denied = await requireSession();
   if (denied) return denied;
   try {
-    return NextResponse.json(await reconcile(40_000));
+    return NextResponse.json(await reconcile(30_000));
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 500 });
   }

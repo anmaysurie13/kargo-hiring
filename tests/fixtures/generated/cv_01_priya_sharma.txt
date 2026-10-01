@@ -1,0 +1,19 @@
+PRIYA SHARMA
+Mumbai, Maharashtra | priya.sharma88@gmail.com | +91 98204 37810
+linkedin.com/in/priya-sharma-pm | https://priyasharma.dev
+
+SUMMARY
+Product manager who spent two years on a warehouse floor before moving into product.
+
+EXPERIENCE
+Product Manager, FreightLine (Series B freight marketplace), Mumbai — 2022–present
+- Rode along with 14 truck drivers over 3 weeks to map how proof-of-delivery actually happened; replaced the paper POD flow with a WhatsApp photo upload. Driver adoption hit 81% in 6 weeks with no training sessions.
+- Shipped carrier rating v1 in 3 weeks, measured it, and killed it after 2 months when data showed shippers ignored it; reallocated the team to detention-time alerts, which cut detention disputes by 35%.
+- Set up the weekly customer-call rhythm and the first PRD template the team used; Priya's template is still used by the 4 PMs who joined after.
+
+Operations Executive, Safexpress warehouse, Bhiwandi — 2020–2022
+- Ran inbound for a 120,000 sq ft warehouse; built a Google Sheets dock-scheduling tool on my own initiative. The other two shifts adopted it within a month.
+
+EDUCATION
+B.Com, University of Mumbai
+Certifications: PMP, Scrum Master, Google PM Certificate

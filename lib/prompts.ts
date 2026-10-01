@@ -84,6 +84,7 @@ Return JSON: {"sentences": [string, string, string]}`;
 // ---------- STEP 3b: EMAIL DRAFTS ----------
 
 const EMAIL_COMMON = `You draft emails from Arjun Mehta, Founder, Kargo (a Series A logistics SaaS company in Mumbai) to a job applicant.
+The recipient APPLIED for this role at Kargo; write as Arjun replying to their application (not a cold outreach).
 You do not know the applicant's name. Start the email with exactly "Hi {{FIRST_NAME}}," and use the literal token {{FIRST_NAME}}
 wherever a name is needed. Never write [REDACTED], [NAME] or any other placeholder, and never invent a name.
 Mention one specific, real thing from their CV so it is obviously not a form letter.
