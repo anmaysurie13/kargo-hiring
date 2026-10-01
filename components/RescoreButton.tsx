@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { runReconcile } from "./EmailPanel";
+import { runReconcile } from "./actions";
 import { btn } from "./ui";
 
 async function rescoreOne(id: string): Promise<string | null> {
@@ -49,7 +49,7 @@ export function RescoreButton({ ids, label }: { ids: string[]; label?: string })
 
   return (
     <span className="inline-flex flex-col items-end">
-      <button className={btn.secondary} disabled={!!state || ids.length === 0} onClick={run}>
+      <button className={btn.action} disabled={!!state || ids.length === 0} onClick={run}>
         {state ?? label ?? (many ? `Rescore all (${ids.length})` : "Rescore")}
       </button>
       {errors.length > 0 && <span className="mt-1 max-w-xs text-xs text-rose-600">{errors.length} error(s): {errors[0]}</span>}

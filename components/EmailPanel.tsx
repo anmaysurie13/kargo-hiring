@@ -3,50 +3,46 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { renderBody, unsafeBodyReason } from "@/lib/email-render";
+import type { DraftType } from "@/lib/types";
 import type { CardData, EmailEnv } from "@/lib/view-types";
-import { btn, draftPill } from "./ui";
+import { decide, patchCandidate, sendNow } from "./actions";
+import { ConfirmSend } from "./ConfirmSend";
+import { btn, draftPill, field } from "./ui";
 
-export async function runReconcile(): Promise<string[]> {
-  const errors: string[] = [];
-  for (let i = 0; i < 20; i++) {
-    const res = await fetch("/api/reconcile", { method: "POST" });
-    const j = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      errors.push(j.error ?? `HTTP ${res.status}`);
-      break;
-    }
-    errors.push(...(j.errors ?? []));
-    if (!j.remaining || !j.processed) break;
-  }
-  return errors;
-}
+export { runReconcile } from "./actions";
 
-/** Email preview / edit / send / switch / hold for one candidate. Nothing is sent without a click + confirm. */
+const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/** Shortlist decision + draft email for one candidate. Every send needs a click in ConfirmSend. */
 export function EmailPanel({ c, email }: { c: CardData; email: EmailEnv }) {
   const router = useRouter();
   const d = c.draft;
-  const [editing, setEditing] = useState(false);
-  const [text, setText] = useState(d?.template ?? "");
-  const [subject, setSubject] = useState(d?.subject ?? "");
-  const [busy, setBusy] = useState<string | null>(null);
-  const [confirming, setConfirming] = useState(false);
-  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const sent = d?.status === "sent";
   const locked = sent || d?.status === "sending";
 
-  const preview = d ? renderBody(editing ? text : d.template, c.fullName) : "";
-  const previewSubject = editing ? subject : d?.subject ?? "";
-  const problem = d ? unsafeBodyReason(preview, previewSubject) : null;
+  const rendered = d ? renderBody(d.template, c.fullName) : "";
+  const [text, setText] = useState(rendered);
+  const [subject, setSubject] = useState(d?.subject ?? "");
+  const [synced, setSynced] = useState(`${d?.type}|${d?.template}|${d?.subject}`);
+  const key = `${d?.type}|${d?.template}|${d?.subject}`;
+  if (key !== synced) {
+    // The draft changed on the server (regenerated after a decision); reset the editor.
+    setSynced(key);
+    setText(rendered);
+    setSubject(d?.subject ?? "");
+  }
+  const dirty = !!d && (text !== rendered || subject !== d.subject);
 
-  async function act(label: string, fn: () => Promise<Response | void>) {
+  const [busy, setBusy] = useState<string | null>(null);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [confirm, setConfirm] = useState<DraftType | null>(null);
+  const [sendError, setSendError] = useState<string | null>(null);
+
+  async function run(label: string, fn: () => Promise<void>) {
     setBusy(label);
     setMsg(null);
     try {
-      const res = await fn();
-      if (res && !res.ok) {
-        const j = await res.json().catch(() => ({}));
-        setMsg({ ok: false, text: j.error ?? `HTTP ${res.status}` });
-      }
+      await fn();
     } catch (e) {
       setMsg({ ok: false, text: (e as Error).message });
     }
@@ -54,113 +50,122 @@ export function EmailPanel({ c, email }: { c: CardData; email: EmailEnv }) {
     router.refresh();
   }
 
-  const patchCandidate = (body: object) => fetch(`/api/candidates/${c.id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
-
-  async function switchType(to: "invite" | "rejection" | null) {
-    await act(to ? `Switching to ${to}…` : "Resetting…", async () => {
-      const res = await patchCandidate({ decision_override: to });
-      if (!res.ok) return res;
-      const errs = await runReconcile();
-      if (errs.length) setMsg({ ok: false, text: errs.join("; ") });
-    });
-  }
-
+  /** Save edits; the real first name is turned back into {{FIRST_NAME}} so it is never stored in the draft. */
   async function save() {
-    await act("Saving…", async () => {
-      const res = await fetch(`/api/drafts/${c.id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ edited_body: text, subject }) });
-      if (res.ok) setEditing(false);
-      return res;
+    const template = c.firstName && c.firstName !== "Unnamed" ? text.replace(new RegExp(`\\b${escapeRe(c.firstName)}\\b`, "g"), "{{FIRST_NAME}}") : text;
+    const res = await fetch(`/api/drafts/${c.id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ edited_body: template, subject }) });
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? `HTTP ${res.status}`);
+  }
+
+  /** Advance / Reject: switch the draft type if needed, then ask before sending. */
+  async function choose(type: DraftType) {
+    await run(type === "invite" ? "Preparing invite…" : "Preparing rejection…", async () => {
+      if (c.held) await patchCandidate(c.id, { held: false });
+      if (dirty && d?.type === type) await save();
+      if (d?.type !== type || c.desiredType !== type) await decide(c.id, type);
+      setSendError(null);
+      setConfirm(type);
     });
   }
 
-  async function send() {
-    setConfirming(false);
-    await act("Sending…", async () => {
-      const res = await fetch(`/api/send/${c.id}`, { method: "POST" });
-      if (res.ok) {
-        const j = await res.json();
-        setMsg({ ok: true, text: `Sent to ${j.sentTo}` });
-      }
-      return res;
-    });
+  async function doSend() {
+    setBusy("Sending…");
+    setSendError(null);
+    try {
+      if (dirty) await save();
+      const to = await sendNow(c.id);
+      setConfirm(null);
+      setMsg({ ok: true, text: `Sent to ${to}` });
+    } catch (e) {
+      setSendError((e as Error).message);
+    }
+    setBusy(null);
+    router.refresh();
   }
 
-  const other = (d?.type ?? c.desiredType) === "invite" ? "rejection" : "invite";
-  const sendLabel = !email.configured ? "Email not configured" : email.blocked ? "Set TEST_RECIPIENT_EMAIL" : "Confirm & Send";
+  const problem = d ? unsafeBodyReason(text, subject) : null;
+  const canSend = email.configured && !email.blocked;
+  const noSendReason = !email.configured ? "Email not configured" : email.blocked ? "Set TEST_RECIPIENT_EMAIL" : null;
 
   return (
-    <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3">
-      <div className="mb-2 flex flex-wrap items-center gap-2">
-        <span className="text-xs font-medium uppercase tracking-wide text-slate-500">Email</span>
-        {draftPill(d, c.held)}
-        {c.override && <span className="text-xs text-violet-700">manual override: {c.override} (line says {c.aboveLine ? "invite" : "rejection"})</span>}
-        {d?.edited && !sent && <span className="text-xs text-slate-400">edited</span>}
-      </div>
-
-      {!d && <p className="text-sm text-slate-500">Draft is being generated…</p>}
-      {d && (
-        <>
-          {editing ? (
-            <div className="space-y-2">
-              <input value={subject} onChange={(e) => setSubject(e.target.value)} className="w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm" />
-              <textarea value={text} onChange={(e) => setText(e.target.value)} rows={10} className="w-full rounded-md border border-slate-300 bg-white p-2 font-mono text-xs leading-relaxed" />
-              <p className="text-xs text-slate-500">
-                Keep <code className="rounded bg-slate-200 px-1">{"{{FIRST_NAME}}"}</code>. It becomes &ldquo;{c.firstName}&rdquo; when sent.
-              </p>
-            </div>
-          ) : (
-            <div className="rounded-md border border-slate-200 bg-white p-3">
-              <div className="mb-2 text-sm font-medium">{previewSubject}</div>
-              <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-slate-700">{preview}</pre>
-            </div>
-          )}
-          {sent && (
-            <p className="mt-2 text-xs text-slate-500">
-              Sent {d.sent_at && new Date(d.sent_at).toLocaleString("en-IN")} to {d.sent_to}. Sent emails are never modified.
-            </p>
-          )}
-          {d.status === "failed" && d.error_message && <p className="mt-2 text-sm text-rose-600">Last attempt failed: {d.error_message}</p>}
-          {problem && !sent && <p className="mt-2 text-sm text-rose-600">{problem}</p>}
-        </>
-      )}
-
-      {msg && <p className={`mt-2 text-sm ${msg.ok ? "text-emerald-700" : "text-rose-600"}`}>{msg.text}</p>}
-
-      {!locked && (
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          {d && !editing && !confirming && (
-            <button className={btn.primary} disabled={!!busy || !email.configured || email.blocked || !!problem || c.held} onClick={() => setConfirming(true)}>
-              {busy === "Sending…" ? "Sending…" : sendLabel}
+    <div className="space-y-4">
+      <div className="space-y-3 rounded-lg border border-slate-200 bg-white p-4">
+        <h2 className="font-medium">Shortlist decision (human — the last thing you touch)</h2>
+        <p className="text-xs text-slate-500">
+          The system recommends <b>{c.desiredType === "invite" ? "Advance" : "Reject"}</b>
+          {c.override ? " (your override)" : ` (${c.aboveLine ? "above" : "below"} the line)`}. Advance or Reject prepares that email and asks you to confirm; nothing is sent
+          until you press Send now.
+        </p>
+        {locked ? (
+          <p className="text-sm text-slate-600">
+            Decision made: {d?.type === "invite" ? "advanced (invite sent)" : "rejected (rejection sent)"}. Sent emails can&apos;t be undone.
+          </p>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            <button className={c.desiredType === "invite" ? btn.advance : btn.action} disabled={!!busy || !canSend} onClick={() => choose("invite")} title={noSendReason ?? ""}>
+              {busy === "Preparing invite…" ? busy : "Advance"}
             </button>
-          )}
-          {confirming && (
-            <span className="flex items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-2 py-1 text-sm">
-              Send this {d?.type} to {c.firstName}
-              {email.testRecipient ? ` (test → ${email.testRecipient})` : ""}?
-              <button className={btn.small} onClick={send}>Yes, send</button>
-              <button className={btn.small} onClick={() => setConfirming(false)}>Cancel</button>
-            </span>
-          )}
-          {d && !editing && <button className={btn.secondary} disabled={!!busy} onClick={() => { setText(d.template); setSubject(d.subject); setEditing(true); }}>Edit</button>}
-          {editing && (
-            <>
-              <button className={btn.primary} disabled={!!busy} onClick={save}>{busy ?? "Save draft"}</button>
-              <button className={btn.secondary} onClick={() => setEditing(false)}>Cancel</button>
-            </>
-          )}
-          {!editing && (
-            <button className={btn.secondary} disabled={!!busy} onClick={() => switchType(other)}>
-              {busy?.startsWith("Switching") ? busy : `Switch to ${other}`}
+            <button className={c.desiredType === "rejection" ? btn.danger : btn.action} disabled={!!busy || !canSend} onClick={() => choose("rejection")} title={noSendReason ?? ""}>
+              {busy === "Preparing rejection…" ? busy : "Reject"}
             </button>
-          )}
-          {!editing && c.override && <button className={btn.secondary} disabled={!!busy} onClick={() => switchType(null)}>Follow the line</button>}
-          {!editing && (
-            <button className={btn.secondary} disabled={!!busy} onClick={() => act("…", () => patchCandidate({ held: !c.held }))}>
+            <button className={btn.action} disabled={!!busy} onClick={() => run("…", () => patchCandidate(c.id, { held: !c.held }))}>
               {c.held ? "Release hold" : "Hold"}
             </button>
-          )}
+            {(c.override || c.held) && (
+              <button className={btn.action} disabled={!!busy} onClick={() => run("Resetting…", async () => { if (c.held) await patchCandidate(c.id, { held: false }); if (c.override) await decide(c.id, null); })}>
+                Back to pending
+              </button>
+            )}
+          </div>
+        )}
+        {noSendReason && !locked && <p className="text-xs text-amber-700">{noSendReason}: sending is disabled.</p>}
+      </div>
+
+      <div className="space-y-2 rounded-lg border border-slate-200 bg-white p-4">
+        <div className="flex items-center justify-between">
+          <span className="text-xs uppercase tracking-wide text-slate-400">{d ? (d.type === "invite" ? "Interview invite" : "Rejection") : "Draft email"}</span>
+          {draftPill(d, c.held)}
         </div>
-      )}
+        {!d ? (
+          <div className="skeleton-shimmer h-24 rounded-md" aria-label="Draft is being written" />
+        ) : (
+          <>
+            <input value={subject} disabled={locked} onChange={(e) => setSubject(e.target.value)} className={`${field.textarea} py-1.5 font-medium`} />
+            <textarea value={text} disabled={locked} onChange={(e) => setText(e.target.value)} rows={11} className={field.textarea} />
+            {d.status === "failed" && d.error_message && <p className="text-xs text-rose-600">Last error: {d.error_message}</p>}
+            {problem && !locked && <p className="text-xs text-rose-600">{problem}</p>}
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="text-xs text-slate-500">
+                To: {sent ? d.sent_to : email.testRecipient ? `${email.testRecipient} (test mode)` : "the candidate's address"}
+                {sent && d.sent_at && ` · sent ${new Date(d.sent_at).toLocaleString("en-IN")}`}
+              </span>
+              {!locked && (
+                <span className="flex gap-2">
+                  <button className={btn.action} disabled={!!busy || !dirty} onClick={() => run("Saving…", save)}>
+                    {busy === "Saving…" ? "Saving…" : "Save draft"}
+                  </button>
+                  <button className={btn.advance} disabled={!!busy || !canSend || !!problem || c.held} onClick={() => { setSendError(null); setConfirm(d.type); }} title={noSendReason ?? (c.held ? "Held" : "")}>
+                    Send
+                  </button>
+                </span>
+              )}
+            </div>
+          </>
+        )}
+        {msg && <p className={`text-sm ${msg.ok ? "text-emerald-700" : "text-rose-600"}`}>{msg.text}</p>}
+      </div>
+
+      <ConfirmSend
+        open={confirm != null && !!d && d.type === confirm}
+        firstName={c.firstName}
+        type={confirm ?? "invite"}
+        subject={subject}
+        email={email}
+        busy={busy === "Sending…"}
+        error={sendError}
+        onConfirm={doSend}
+        onClose={() => setConfirm(null)}
+      />
     </div>
   );
 }

@@ -21,6 +21,10 @@ export function toCard(snap: Snapshot, c: CandidateView, names: Map<string, stri
       return { criterionId: k.id, name: k.name, weight: k.weight, score: s?.score ?? 0, points: s?.points ?? 0, reason: s?.reason ?? "" };
     });
   const d = c.draft;
+  const other = otherRole(role);
+  const otherTotal = c.totals[other];
+  const reroute = r.crossRole != null && otherTotal != null && otherTotal > c.totals[role]!;
+  const tier = r.desiredType === "invite" ? "INTERVIEW" : r.crossRole ? "REVIEW" : "PASS";
   return {
     id: c.id,
     rank: r.rank,
@@ -29,8 +33,11 @@ export function toCard(snap: Snapshot, c: CandidateView, names: Map<string, stri
     filename: c.original_filename,
     appliedRole: role,
     total: c.totals[role]!,
-    otherTotal: c.totals[otherRole(role)],
+    otherTotal,
     crossRole: r.crossRole,
+    recommendedRole: reroute ? other : role,
+    reroute,
+    tier,
     aboveLine: r.aboveLine,
     desiredType: r.desiredType,
     override: c.decision_override,

@@ -6,8 +6,8 @@ import { ROLES, roleLabel } from "@/lib/types";
 export default async function RubricPage() {
   const { ok, errors, criteria } = await rubricHealth();
   return (
-    <div className="space-y-5">
-      <PageHeader icon={<span className="text-lg">≡</span>} title="Rubric">
+    <div className="space-y-6">
+      <PageHeader icon="rubric" title="Rubric">
         Exactly what candidates are ranked against, read live from <code>rubric_criteria</code>. Derived from the patterns in Arjun&apos;s best past hires, not the job descriptions.
         Points per criterion = weight × score ÷ 5. Every candidate is scored against both roles.
       </PageHeader>
@@ -19,7 +19,7 @@ export default async function RubricPage() {
           return (
             <Card key={r} className="p-4">
               <div className="flex items-center justify-between">
-                <h2 className="font-semibold">{roleLabel(r)}</h2>
+                <h2 className="font-medium">{roleLabel(r)}</h2>
                 <Pill tone={sum === 100 ? "green" : "red"}>weights = {sum}</Pill>
               </div>
               <ol className="mt-3 space-y-3">
@@ -39,7 +39,7 @@ export default async function RubricPage() {
         })}
       </div>
       <Card className="p-4">
-        <h2 className="font-semibold">Scoring scale</h2>
+        <h2 className="font-medium">Scoring scale</h2>
         <pre className="mt-2 whitespace-pre-wrap font-sans text-sm text-slate-600">{SCORING_SCALE}</pre>
       </Card>
     </div>

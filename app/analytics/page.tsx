@@ -47,8 +47,8 @@ export default async function AnalyticsPage() {
   const oldest = unsent[0];
 
   return (
-    <div className="space-y-5">
-      <PageHeader icon={<span className="text-lg">▤</span>} title="Analytics">Where the pool is strong, where it is thin, and who is still waiting to hear back.</PageHeader>
+    <div className="space-y-6">
+      <PageHeader icon="chart" title="Analytics">Where the pool is strong, where it is thin, and who is still waiting to hear back.</PageHeader>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatTile label="Oldest unsent" value={oldest ? ago(oldest.created_at) : "–"} tone="red" hint={oldest ? `${unsent.length} people have not heard back` : "everyone has heard back"} />
@@ -60,16 +60,16 @@ export default async function AnalyticsPage() {
       {perRole.map((p) => (
         <div key={p.role} className="grid gap-4 lg:grid-cols-3">
           <Card className="p-4">
-            <h2 className="font-semibold">{roleLabel(p.role)}: funnel</h2>
+            <h2 className="font-medium">{roleLabel(p.role)}: funnel</h2>
             <FunnelChart data={p.funnel} />
           </Card>
           <Card className="p-4">
-            <h2 className="font-semibold">{p.role} score distribution</h2>
+            <h2 className="font-medium">{p.role} score distribution</h2>
             <p className="text-xs text-slate-500">Total /100 in buckets of 10. Red line = shortlist cut (top {n}).</p>
             <Histogram data={p.buckets} lineBucket={p.lineBucket} lineScore={p.lineScore} />
           </Card>
           <Card className="p-4">
-            <h2 className="font-semibold">{p.role} average per criterion</h2>
+            <h2 className="font-medium">{p.role} average per criterion</h2>
             <p className="text-xs text-slate-500">Mean score (1–5) among {p.role} applicants. (weight)</p>
             <CriterionChart data={p.crit} />
           </Card>
@@ -77,7 +77,7 @@ export default async function AnalyticsPage() {
       ))}
 
       <Card className="p-4">
-        <h2 className="font-semibold">Processing errors</h2>
+        <h2 className="font-medium">Processing errors</h2>
         {errors.length === 0 ? (
           <p className="mt-1 text-sm text-slate-500">None.</p>
         ) : (

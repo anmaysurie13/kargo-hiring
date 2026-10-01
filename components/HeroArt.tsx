@@ -1,43 +1,54 @@
-/** Decorative illustration for the dashboard hero: three people beside ranked profile cards. */
+/** Hero illustration: a hiring team beside ranked candidate profile cards. */
 export function HeroArt() {
+  const person = (x: number, y: number, shirt: string, tie = false, cls = "") => (
+    <g className={cls} style={{ transformBox: "fill-box", transformOrigin: "center" }}>
+      <g transform={`translate(${x} ${y})`}>
+        <rect x="-30" y="128" width="20" height="58" rx="7" fill="#3730a3" />
+        <rect x="10" y="128" width="20" height="58" rx="7" fill="#3730a3" />
+        <rect x="-40" y="44" width="80" height="98" rx="30" fill={shirt} stroke={shirt === "#ffffff" ? "#cbd5e1" : "none"} strokeWidth="2" />
+        {tie && <path d="M0 50 l-6 10 6 46 6 -46z" fill="#4338ca" />}
+        <circle cx="0" cy="18" r="24" fill="#fde2c8" />
+        <path d="M-24 14 a24 24 0 0 1 48 0 q-10 -16 -24 -14 q-14 -2 -24 14z" fill="#7c2d12" />
+      </g>
+    </g>
+  );
   return (
-    <svg viewBox="0 0 360 200" className="h-full w-full" role="img" aria-label="Illustration of a hiring team reviewing ranked candidate profiles">
-      <ellipse cx="170" cy="186" rx="150" ry="10" fill="#eef2ff" />
-      {/* ranked cards */}
-      {[
-        { y: 40, c: "#10b981" },
-        { y: 82, c: "#6366f1" },
-        { y: 124, c: "#f59e0b" },
-      ].map((r, i) => (
-        <g key={i} transform={`translate(240 ${r.y})`}>
-          <rect width="104" height="34" rx="8" fill="#fff" stroke="#e2e8f0" />
-          <circle cx="16" cy="17" r="8" fill={r.c} opacity="0.85" />
-          <rect x="30" y="10" width="56" height="5" rx="2.5" fill="#cbd5e1" />
-          <rect x="30" y="20" width="38" height="5" rx="2.5" fill="#e2e8f0" />
-        </g>
-      ))}
-      <path d="M232 57 L214 70 M232 99 L214 99 M232 141 L214 128" stroke="#c7d2fe" strokeWidth="2" strokeDasharray="3 3" />
-      {/* chart sparkle */}
-      <polyline points="40,40 62,24 84,34 108,14" fill="none" stroke="#818cf8" strokeWidth="2.5" strokeLinecap="round" />
-      {[[40, 40], [62, 24], [84, 34], [108, 14]].map(([x, y]) => <circle key={x} cx={x} cy={y} r="3.5" fill="#6366f1" />)}
+    <svg viewBox="0 0 600 440" className="h-full w-full" role="img" aria-label="Illustration of a hiring team reviewing candidate profiles">
+      <ellipse cx="290" cy="410" rx="230" ry="18" fill="#eef2ff" />
+      <circle cx="290" cy="230" r="150" fill="#eef2ff" opacity="0.7" />
+      {/* trend line */}
+      <g className="float-fast">
+        <polyline points="90,110 140,70 185,95 235,45" fill="none" stroke="#818cf8" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
+        {[[90, 110], [140, 70], [185, 95], [235, 45]].map(([x, y]) => <circle key={x} cx={x} cy={y} r="7" fill="#6366f1" />)}
+      </g>
+      {/* tag */}
+      <g className="float-med">
+        <rect x="250" y="120" width="70" height="26" rx="7" fill="#fff" stroke="#fecaca" strokeWidth="2" />
+        <circle cx="266" cy="133" r="5" fill="#f87171" />
+        <rect x="277" y="129" width="32" height="8" rx="4" fill="#fca5a5" />
+      </g>
+      <path d="M70 230 l12 12 -12 12 -12 -12z" fill="none" stroke="#c7d2fe" strokeWidth="3" className="float-slow" />
       {/* people */}
-      {[
-        { x: 70, body: "#f59e0b", h: 0 },
-        { x: 130, body: "#ffffff", h: -10, stroke: "#cbd5e1" },
-        { x: 190, body: "#f59e0b", h: 6 },
-      ].map((p, i) => (
-        <g key={i} transform={`translate(${p.x} ${80 + p.h})`}>
-          <circle cx="0" cy="0" r="14" fill="#fde7d4" />
-          <path d="M-14 -3 a14 14 0 0 1 28 0 q-6 -10 -28 0" fill="#78350f" />
-          <rect x="-22" y="18" width="44" height="58" rx="18" fill={p.body} stroke={p.stroke ?? "none"} />
-          {i === 1 && <rect x="-3" y="20" width="6" height="30" fill="#4338ca" />}
-          <rect x="-16" y="74" width="12" height="26" rx="4" fill="#3730a3" />
-          <rect x="4" y="74" width="12" height="26" rx="4" fill="#3730a3" />
-        </g>
-      ))}
-      <rect x="150" y="30" width="34" height="14" rx="4" fill="#fff" stroke="#fecaca" />
-      <rect x="156" y="35" width="10" height="4" rx="2" fill="#f87171" />
-      <rect x="20" y="70" width="10" height="10" transform="rotate(45 25 75)" fill="none" stroke="#c7d2fe" strokeWidth="2" />
+      {person(175, 200, "#f59e0b", false, "float-slow")}
+      {person(275, 175, "#ffffff", true, "float-med")}
+      {person(370, 210, "#f59e0b", false, "float-fast")}
+      {/* ranked profile cards */}
+      <g className="float-slow">
+        {[
+          { y: 150, c: "#10b981" },
+          { y: 215, c: "#6366f1" },
+          { y: 280, c: "#f59e0b" },
+        ].map((r, i) => (
+          <g key={i} transform={`translate(440 ${r.y})`}>
+            <rect width="130" height="50" rx="12" fill="#fff" stroke="#e2e8f0" strokeWidth="2" />
+            <circle cx="25" cy="25" r="11" fill={r.c} />
+            <rect x="45" y="15" width="68" height="8" rx="4" fill="#cbd5e1" />
+            <rect x="45" y="29" width="46" height="8" rx="4" fill="#e2e8f0" />
+          </g>
+        ))}
+      </g>
+      <path d="M420 175 h16 M420 240 h16 M420 305 h16" stroke="#c7d2fe" strokeWidth="3" strokeDasharray="4 5" strokeLinecap="round" />
+      <path d="M545 100 l10 18 h-20z" fill="#a5b4fc" className="float-fast" />
     </svg>
   );
 }

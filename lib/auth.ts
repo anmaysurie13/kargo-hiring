@@ -2,6 +2,9 @@
 // it runs in proxy.ts and in route handlers alike.
 export const SESSION_COOKIE = "kargo_session";
 
+/** Password protection is ON only when DASHBOARD_PASSWORD is set. Unset = the dashboard is open to anyone with the link. */
+export const authEnabled = () => Boolean(process.env.DASHBOARD_PASSWORD);
+
 export async function sessionToken(password: string): Promise<string> {
   const enc = new TextEncoder();
   const key = await crypto.subtle.importKey("raw", enc.encode(password), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);

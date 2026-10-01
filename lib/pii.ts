@@ -25,10 +25,13 @@ const MOBILE_RE = /(?<![\d+])(?:(?:\+|00)\s*91[\s.\-]*|\(\s*\+?\s*91\s*\)[\s.\-]
 // Landlines with an explicit prefix: +91 22 2345 6789, 022-23456789.
 const LANDLINE_RE = /(?<![\d+])(?:(?:\+|00)\s*91[\s.\-]*|0)[1-9]\d{1,3}[\s.\-]+\d{3,4}[\s.\-]?\d{3,4}(?!\d)/g;
 
-// Any URL, plus bare linkedin/github style handles. Profile and portfolio links usually
-// contain the candidate's name, and company URLs carry no scoring evidence.
+// Any URL, plus bare "domain.tld/path" links (linkedin.com/in/x, github.com/x, leetcode.com/x, portfolio.dev/x).
+// Profile and portfolio links usually contain the candidate's name, and URLs carry no scoring evidence.
 const URL_RE =
-  /\b(?:https?:\/\/|www\.)[^\s<>()"']+|\b(?:[a-z0-9-]+\.)?(?:linkedin\.com|github\.com|gitlab\.com|behance\.net|dribbble\.com|medium\.com|about\.me|notion\.site|bit\.ly)\/[^\s<>()"']*/gi;
+  /\b(?:https?:\/\/|www\.)[^\s<>()"']+|\b(?:[a-z0-9-]+\.)+(?:com|in|io|dev|me|co|org|net|ai|app|site|page|xyz|tech|so|ly|link|bio)\/[^\s<>()"']*/gi;
+
+/** Handle-like tokens (usernames, paths, ids) that may embed a name: anything containing . / _ @, or letters followed by digits. */
+const HANDLE_TOKEN_RE = /[^\s|·•,;()<>"']*[./_@][^\s|·•,;()<>"']*|\b[a-z]+[0-9]+[a-z0-9]*\b/gi;
 
 const HEADER_WORDS = new Set([
   "curriculum", "vitae", "resume", "résumé", "cv", "profile", "summary", "contact", "personal",
@@ -149,6 +152,30 @@ export function nameTerms(fullName: string | null): string[] {
   return [...new Set([fullName.trim(), ...parts])].sort((a, b) => b.length - a.length);
 }
 
+/** priyasharma / priya.sharma / priya_sharma / priya-sharma / psharma / sharmapriya, matched anywhere (no word boundary). */
+function nameParts(fullName: string | null, min: number): string[] {
+  return (fullName ?? "")
+    .toLowerCase()
+    .split(/\s+/)
+    .map((p) => p.replace(/[^\p{L}]/gu, ""))
+    .filter((p) => p.length >= min);
+}
+
+function joinedNameRegex(fullName: string | null): RegExp | null {
+  const parts = nameParts(fullName, 2);
+  if (parts.length < 2) return null;
+  const first = parts[0];
+  const last = parts[parts.length - 1];
+  const variants = [`${first}[._-]?${last}`, `${last}[._-]?${first}`];
+  if (last.length >= 4) variants.push(`(?<!\\p{L})${first[0]}[._-]?${last}`);
+  return new RegExp(variants.join("|"), "giu");
+}
+
+/** Name parts long enough to search for inside handles/URLs without false positives. */
+function handleParts(fullName: string | null): string[] {
+  return nameParts(fullName, 4);
+}
+
 function nameRegex(term: string) {
   // Whole-word, case-insensitive, tolerant of any whitespace inside a multi-word name.
   const body = term.split(/\s+/).map(escapeRe).join("\\s+");
@@ -181,6 +208,12 @@ export function redact(
   for (const term of nameTerms(pii.fullName)) {
     text = text.replace(nameRegex(term), () => (report.name++, REDACTED));
   }
+  // Joined forms (priyasharma, priya.sharma, priya_sharma, psharma) and handles that embed a name part.
+  const joined = joinedNameRegex(pii.fullName);
+  if (joined) text = text.replace(joined, () => (report.name++, REDACTED));
+  const parts = handleParts(pii.fullName);
+  if (parts.length)
+    text = text.replace(HANDLE_TOKEN_RE, (tok) => (tok !== REDACTED && parts.some((p) => tok.toLowerCase().includes(p)) ? (report.name++, REDACTED) : tok));
   return { content: text, report };
 }
 
@@ -190,6 +223,10 @@ export class PIILeakError extends Error {}
 export function assertNoPII(content: string, pii: ExtractedPII): void {
   const leaks: string[] = [];
   for (const term of nameTerms(pii.fullName)) if (nameRegex(term).test(content)) leaks.push("name");
+  const joined = joinedNameRegex(pii.fullName);
+  if (joined && joined.test(content)) leaks.push("name");
+  const parts = handleParts(pii.fullName);
+  if (parts.length && (content.match(HANDLE_TOKEN_RE) ?? []).some((tok) => parts.some((p) => tok.toLowerCase().includes(p)))) leaks.push("name");
   if (pii.email && content.toLowerCase().includes(pii.email.toLowerCase())) leaks.push("email");
   if (findEmails(content).length) leaks.push("email");
   const pr = pii.phone ? phoneRegex(pii.phone) : null;

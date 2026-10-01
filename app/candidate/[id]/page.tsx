@@ -3,12 +3,14 @@ import { notFound } from "next/navigation";
 import { Breakdown } from "@/components/CandidateCard";
 import { EmailPanel } from "@/components/EmailPanel";
 import { RescoreButton } from "@/components/RescoreButton";
-import { Card, Pill, StatTile } from "@/components/ui";
+import { InfoTile } from "@/components/ui";
 import { getCandidateContent, loadSnapshot } from "@/lib/data";
 import { firstNameOf } from "@/lib/pii";
 import { getPII } from "@/lib/pii-store";
 import { ROLES, roleLabel } from "@/lib/types";
 import { emailEnv, toCard } from "@/lib/view";
+
+const sentences = (t: string) => t.match(/[^.!?]+[.!?]+(\s|$)/g)?.map((s) => s.trim()) ?? [t];
 
 export default async function CandidatePage({ params }: PageProps<"/candidate/[id]">) {
   const { id } = await params;
@@ -19,80 +21,122 @@ export default async function CandidatePage({ params }: PageProps<"/candidate/[i
   const firstName = firstNameOf(pii?.full_name) ?? "Unnamed";
   const card = toCard(snap, c, new Map([[id, firstName]]), new Map([[id, pii?.full_name ?? null]]));
   const report = (row.pii_redaction_report ?? {}) as Record<string, number | string>;
+  const brief = card?.brief ? sentences(card.brief) : null;
+  const roleCount = snap.byRole[c.applied_role].length;
+
+  const scorecard = (r: (typeof ROLES)[number]) =>
+    snap.criteria
+      .filter((k) => k.role === r)
+      .map((k) => {
+        const s = c.scores.find((x) => x.criterion_id === k.id && x.role === r);
+        return { criterionId: k.id, name: k.name, weight: k.weight, score: s?.score ?? 0, points: s?.points ?? 0, reason: s?.reason ?? "Not scored" };
+      });
+  const applied = scorecard(c.applied_role);
+  const strongest = [...applied].sort((a, b) => b.score - a.score || b.weight - a.weight)[0];
+  const weak = applied.filter((b) => b.score <= 2);
+
+  const summary =
+    c.status === "error"
+      ? `Error: ${c.error_message}`
+      : c.status === "processing"
+        ? "Still processing…"
+        : card
+          ? `Ranked #${card.rank} of ${roleCount} ${c.applied_role} applicants, ${card.aboveLine ? "above" : "below"} the shortlist line (top ${snap.n}). Recommendation: ${card.desiredType === "invite" ? "advance to interview" : "reject"}${card.override ? " (your override)" : ""}.${card.crossRole ? ` Also strong for ${card.crossRole}.` : ""}`
+          : "Not ranked yet.";
 
   return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <Link href={`/?role=${c.applied_role}`} className="text-xs text-slate-500 hover:text-slate-800">← Back to shortlist</Link>
-          <h1 className="mt-1 text-2xl font-semibold">{pii?.full_name ?? firstName}</h1>
-          <p className="text-sm text-slate-500">
-            Applied: {roleLabel(c.applied_role)} · {c.original_filename} · uploaded {new Date(c.created_at).toLocaleDateString("en-IN")}
+          <Link href={`/?role=${c.applied_role}`} className="text-xs text-slate-400 hover:text-slate-700">← Back to shortlist</Link>
+          <h1 className="mt-1 text-2xl font-semibold tracking-tight">{pii?.full_name ?? firstName}</h1>
+          <p className="text-sm text-slate-500">Applied: {c.applied_role} · {c.original_filename}</p>
+        </div>
+        <RescoreButton ids={[id]} label="Re-run pipeline" />
+      </div>
+
+      <div className={`rounded-md border px-4 py-3 text-sm ${c.status === "error" ? "border-rose-200 bg-rose-50 text-rose-700" : "border-slate-200 bg-slate-50 text-slate-600"}`}>{summary}</div>
+
+      {card && (
+        <div className="grid gap-4 sm:grid-cols-3">
+          <InfoTile label="Recommended role" value={<>{card.recommendedRole}{card.reroute && <span className="ml-1 text-xs font-normal text-indigo-600">reroute?</span>}</>} />
+          <InfoTile label="Final tier" value={card.tier} />
+          <InfoTile label={`${c.applied_role} score`} value={`${card.total.toFixed(1)} / 100`} />
+        </div>
+      )}
+
+      {card && (
+        <div className="rounded-lg border border-slate-200 bg-white p-4">
+          <div className="mb-1 text-xs uppercase tracking-wide text-slate-400">Why ranked here</div>
+          <p className="text-base font-medium text-slate-900">
+            {brief?.[1] ?? (strongest ? `Strongest evidence: ${strongest.name} (${strongest.score}/5): ${strongest.reason}` : "–")}
           </p>
         </div>
-        <RescoreButton ids={[id]} />
-      </div>
-
-      {c.status === "error" && <Card className="border-rose-300 bg-rose-50 p-4 text-sm text-rose-800">Error: {c.error_message}</Card>}
-      {c.status === "processing" && <Card className="p-4 text-sm text-slate-600">Still processing…</Card>}
-
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <StatTile label={`Rank in ${c.applied_role}`} value={c.ranked ? `#${c.ranked.rank}` : "–"} hint={c.ranked ? (c.ranked.aboveLine ? "above the line" : "below the line") : undefined} tone={c.ranked?.aboveLine ? "green" : "slate"} />
-        <StatTile label="PM total" value={c.totals.PM?.toFixed(1) ?? "–"} hint="/100" />
-        <StatTile label="SPM total" value={c.totals.SPM?.toFixed(1) ?? "–"} hint="/100" />
-        <StatTile label="Recommendation" value={c.ranked?.desiredType ?? "–"} tone={c.ranked?.desiredType === "invite" ? "green" : "slate"} hint={c.decision_override ? "manual override" : "follows the line"} />
-      </div>
-
-      {card?.brief && (
-        <Card className="p-4">
-          <div className="text-[11px] font-medium uppercase tracking-wide text-indigo-700">Interview brief ({c.applied_role})</div>
-          <p className="mt-1 leading-relaxed">{card.brief}</p>
-        </Card>
-      )}
-      {c.ranked?.crossRole && (
-        <Card className="border-violet-200 bg-violet-50 p-3 text-sm text-violet-800">
-          Also strong for {c.ranked.crossRole}: their {c.ranked.crossRole} score would place them in that role&apos;s top {snap.n}.
-        </Card>
       )}
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid gap-4 md:grid-cols-2">
         {ROLES.map((r) => {
-          const rows = snap.criteria
-            .filter((k) => k.role === r)
-            .map((k) => {
-              const s = c.scores.find((x) => x.criterion_id === k.id && x.role === r);
-              return { criterionId: k.id, name: k.name, weight: k.weight, score: s?.score ?? 0, points: s?.points ?? 0, reason: s?.reason ?? "Not scored" };
-            });
+          const rows = scorecard(r);
+          const rr = snap.byRole[r].find((x) => x.id === id);
           return (
-            <Card key={r} className="p-4">
-              <div className="mb-1 flex items-center justify-between">
-                <h2 className="font-semibold">{roleLabel(r)} scorecard</h2>
-                <span className="num text-lg font-semibold">{c.totals[r]?.toFixed(1) ?? "–"}<span className="text-xs text-slate-400">/100</span></span>
-              </div>
-              {r === c.applied_role && <Pill tone="blue">applied role</Pill>}
-              <Breakdown rows={rows} />
-            </Card>
+            <div key={r} className="rounded-lg border border-slate-200 bg-white p-4">
+              <h2 className="mb-1 font-medium">{r === "PM" ? "Product Manager fit" : "Senior PM fit"}</h2>
+              <p className="mb-2 text-xs text-slate-400">
+                Score {c.totals[r]?.toFixed(1) ?? "–"} / 100{rr ? ` · Rank #${rr.rank} in ${r}` : c.applied_role !== r ? ` · applied ${c.applied_role}` : ""}
+              </p>
+              <Breakdown rows={rows} prefix={r} />
+            </div>
           );
         })}
       </div>
 
+      {card && (brief?.[2] || weak.length > 0) && (
+        <div className="rounded-lg border border-slate-200 bg-white p-4">
+          <h2 className="mb-2 font-medium">Probe questions from scoring</h2>
+          <ul className="list-disc space-y-1 pl-5 text-sm text-slate-700">
+            {brief?.[2] && <li>{brief[2]}</li>}
+            {weak.map((w) => (
+              <li key={w.criterionId}>
+                {w.name} scored {w.score}/5: ask for a concrete example. ({w.reason})
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {card?.brief && (
+        <div className="rounded-lg border border-slate-200 bg-white p-4">
+          <h2 className="mb-2 font-medium">Interview brief</h2>
+          <p className="text-sm text-slate-900">{card.brief}</p>
+        </div>
+      )}
+
       {card && <EmailPanel c={card} email={emailEnv()} />}
 
       <div className="grid gap-4 lg:grid-cols-[1fr_280px]">
-        <Card className="p-4">
-          <h2 className="font-semibold">CV content as the AI saw it (personal details removed)</h2>
-          <pre className="mt-2 max-h-[600px] overflow-auto whitespace-pre-wrap rounded-lg bg-slate-50 p-3 text-xs leading-relaxed text-slate-700">{row.cv_content ?? "(not stored: redaction failed)"}</pre>
-        </Card>
-        <Card className="h-fit p-4">
-          <h2 className="font-semibold">Redaction report</h2>
-          <p className="mt-1 text-xs text-slate-500">Counts only. No values are stored here.</p>
-          <dl className="mt-3 space-y-1 text-sm">
-            {["name", "email", "phone", "url"].map((k) => (
-              <div key={k} className="flex justify-between"><dt className="capitalize text-slate-500">{k === "url" ? "Profile/URLs" : k}</dt><dd className="num">{report[k] ?? 0}</dd></div>
-            ))}
-            <div className="flex justify-between border-t border-slate-100 pt-1"><dt className="text-slate-500">Name found via</dt><dd>{String(report.nameSource ?? "–").replace("_", " ")}</dd></div>
-          </dl>
-        </Card>
+        <div className="rounded-lg border border-slate-200 bg-white p-4">
+          <h2 className="mb-2 font-medium">CV as the AI saw it (personal details removed)</h2>
+          <pre className="max-h-[600px] overflow-auto whitespace-pre-wrap rounded-md bg-slate-50 p-3 text-xs leading-relaxed text-slate-700">{row.cv_content ?? "(not stored: redaction failed)"}</pre>
+        </div>
+        <div className="h-fit rounded-lg border border-slate-200 bg-white p-4">
+          <h2 className="font-medium">Redaction report</h2>
+          <p className="mt-1 text-xs text-slate-400">Counts only. No values are stored here.</p>
+          <table className="mt-2 w-full text-sm">
+            <tbody>
+              {["name", "email", "phone", "url"].map((k) => (
+                <tr key={k} className="border-t border-slate-100">
+                  <td className="py-1.5 text-slate-500">{k === "url" ? "Profile / URLs" : k[0].toUpperCase() + k.slice(1)}</td>
+                  <td className="num py-1.5 text-right">{report[k] ?? 0}</td>
+                </tr>
+              ))}
+              <tr className="border-t border-slate-100">
+                <td className="py-1.5 text-slate-500">Name found via</td>
+                <td className="py-1.5 text-right">{String(report.nameSource ?? "–").replace("_", " ")}</td>
+              </tr>
+            </tbody>
+          </table>
+          <p className="mt-3 text-xs text-slate-400">Applied {roleLabel(c.applied_role)} · uploaded {new Date(c.created_at).toLocaleDateString("en-IN")}</p>
+        </div>
       </div>
     </div>
   );

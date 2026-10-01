@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Papa from "papaparse";
 import { useRef, useState } from "react";
-import { runReconcile } from "@/components/EmailPanel";
+import { runReconcile } from "@/components/actions";
 import { btn, Card, PageHeader, Pill } from "@/components/ui";
 import type { Role } from "@/lib/types";
 
@@ -47,6 +47,7 @@ export default function UploadPage() {
   const [csv, setCsv] = useState<{ rows: CsvRow[]; name: string } | null>(null);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [drag, setDrag] = useState(false);
+  const [selected, setSelected] = useState<File[]>([]);
   const [drafting, setDrafting] = useState<string | null>(null);
   const input = useRef<HTMLInputElement>(null);
   const reconcileChain = useRef<Promise<void>>(Promise.resolve());
@@ -182,43 +183,57 @@ export default function UploadPage() {
   const counts = items.reduce<Record<string, number>>((m, i) => ((m[i.stage] = (m[i.stage] ?? 0) + 1), m), {});
 
   return (
-    <div className="space-y-5">
-      <PageHeader icon={<span className="text-lg">↑</span>} title="Upload CVs">
-        PDF, DOCX or TXT, or a .zip of them, or a .csv (columns: filename or cv_text, applied_role, optional name, email, phone). Each CV is parsed,
-        stripped of personal details in code, then scored against both rubrics. Briefs and email drafts are written afterwards.{" "}
-        <b>Nothing is ever sent from this page.</b>
+    <div className="max-w-2xl space-y-6">
+      <PageHeader icon="upload" title="Upload CVs">
+        PDF, DOCX or TXT, a .zip of them, or a .csv (filename or cv_text, applied_role, optional name/email/phone). Each candidate is parsed, stripped of personal
+        details in code, and scored against both rubrics the moment it&apos;s uploaded; interview briefs and email drafts follow. Nothing is ever sent from this page:
+        every email waits for your Advance / Reject call.
       </PageHeader>
 
-      <Card className="max-w-3xl space-y-4 p-5">
+      <div
+        onDragOver={(e) => { e.preventDefault(); setDrag(true); }}
+        onDragLeave={() => setDrag(false)}
+        onDrop={(e) => { e.preventDefault(); setDrag(false); setSelected([...e.dataTransfer.files]); }}
+        className={`animate-fade-in-up space-y-4 rounded-lg border bg-white p-5 transition-colors ${drag ? "border-indigo-400 bg-indigo-50/40" : "border-slate-200"}`}
+      >
         <div>
-          <label className="text-sm font-medium">Applied role for this batch</label>
-          <div className="mt-1 flex gap-2">
-            {(["PM", "SPM"] as Role[]).map((r) => (
-              <button key={r} onClick={() => setRole(r)} className={`rounded-lg border px-3 py-1.5 text-sm ${r === role ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 bg-white"}`}>
-                {r === "PM" ? "Product Manager (PM)" : "Senior PM (SPM)"}
-              </button>
-            ))}
-          </div>
+          <label className="mb-1 block text-sm font-medium text-slate-700">Applied role</label>
+          <select value={role} onChange={(e) => setRole(e.target.value as Role)} className="rounded-md border border-slate-300 px-2 py-1.5 text-sm text-slate-900">
+            <option value="PM">Product Manager</option>
+            <option value="SPM">Senior Product Manager</option>
+          </select>
           <p className="mt-1 text-xs text-slate-400">A CSV row&apos;s applied_role overrides this.</p>
         </div>
-
-        <div
-          onDragOver={(e) => { e.preventDefault(); setDrag(true); }}
-          onDragLeave={() => setDrag(false)}
-          onDrop={(e) => { e.preventDefault(); setDrag(false); onFiles(e.dataTransfer.files); }}
-          onClick={() => input.current?.click()}
-          className={`cursor-pointer rounded-xl border-2 border-dashed p-8 text-center text-sm ${drag ? "border-indigo-500 bg-indigo-50" : "border-slate-300 bg-slate-50 hover:bg-slate-100"}`}
-        >
-          <div className="font-medium text-slate-700">Drop CVs here or click to choose</div>
-          <div className="mt-1 text-xs text-slate-500">Multiple files OK · .pdf .docx .txt .zip .csv</div>
-          <input ref={input} type="file" multiple accept=".pdf,.docx,.txt,.zip,.csv" className="hidden" onChange={(e) => { if (e.target.files) onFiles(e.target.files); e.target.value = ""; }} />
+        <div>
+          <label className="mb-1 block text-sm font-medium text-slate-700">Files</label>
+          <input
+            ref={input}
+            type="file"
+            multiple
+            accept=".pdf,.docx,.txt,.zip,.csv"
+            onChange={(e) => setSelected(e.target.files ? [...e.target.files] : [])}
+            className="block w-full text-sm text-slate-600 file:mr-3 file:rounded-md file:border-0 file:bg-slate-900 file:px-3 file:py-1.5 file:text-white"
+          />
+          <p className="mt-1 text-xs text-slate-400">{selected.length ? `${selected.length} file(s) selected` : "Or drag and drop files onto this box."}</p>
         </div>
-      </Card>
+        <button
+          className="rounded-md bg-slate-900 px-4 py-2 text-sm text-white transition-all hover:-translate-y-0.5 hover:bg-slate-700 hover:shadow-md active:translate-y-0 disabled:opacity-40 disabled:hover:translate-y-0 disabled:hover:shadow-none"
+          disabled={selected.length === 0}
+          onClick={() => {
+            const files = selected;
+            setSelected([]);
+            if (input.current) input.current.value = "";
+            onFiles(files);
+          }}
+        >
+          Upload &amp; evaluate
+        </button>
+      </div>
 
       {csv && (
-        <Card className="max-w-5xl p-5">
+        <Card className="animate-fade-in-up p-5">
           <div className="flex items-center justify-between">
-            <h2 className="font-semibold">Preview: {csv.name} ({csv.rows.length} rows)</h2>
+            <h2 className="font-medium">Preview: {csv.name} ({csv.rows.length} rows)</h2>
             <div className="flex gap-2">
               <button className={btn.secondary} onClick={() => setCsv(null)}>Cancel</button>
               <button
@@ -263,14 +278,14 @@ export default function UploadPage() {
       )}
 
       {items.length > 0 && (
-        <Card className="max-w-5xl p-5">
+        <Card className="animate-fade-in-up p-5">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <h2 className="font-semibold">Progress</h2>
+            <h2 className="font-medium">Progress</h2>
             <div className="flex gap-2 text-xs text-slate-500">
               {Object.entries(counts).map(([k, v]) => <span key={k}>{k}: {v}</span>)}
             </div>
           </div>
-          {drafting && <p className="mt-2 rounded-md bg-indigo-50 px-2 py-1 text-sm text-indigo-800">{drafting}</p>}
+          {drafting && <p className="mt-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">{drafting}</p>}
           <ul className="mt-3 divide-y divide-slate-100">
             {items.map((it) => (
               <li key={it.key} className="flex items-center gap-3 py-2 text-sm">
@@ -284,7 +299,7 @@ export default function UploadPage() {
               </li>
             ))}
           </ul>
-          <div className="mt-3"><Link href="/" className={btn.secondary}>Go to dashboard →</Link></div>
+          <div className="mt-3"><Link href="/" className={btn.action}>Go to dashboard →</Link></div>
         </Card>
       )}
     </div>
@@ -292,6 +307,6 @@ export default function UploadPage() {
 }
 
 function StagePill({ stage }: { stage: Stage }) {
-  const tone = stage === "done" ? "green" : stage === "error" ? "red" : stage === "queued" ? "slate" : "blue";
+  const tone = stage === "done" ? "green" : stage === "error" ? "red" : stage === "queued" ? "muted" : "blue";
   return <Pill tone={tone}>{stage === "parsing" ? "parsing…" : stage === "scoring" ? "scoring…" : stage}</Pill>;
 }

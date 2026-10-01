@@ -38,7 +38,7 @@ cp .env.example .env.local   # then fill it in
 | `EMAIL_FROM` | Default `Kargo Hiring <onboarding@resend.dev>` |
 | `TEST_RECIPIENT_EMAIL` | While set, **every** email goes here, subject prefixed `[TEST → original@email]`. While blank, sending is blocked unless `ALLOW_REAL_SEND=true`. |
 | `ALLOW_REAL_SEND` | Leave blank in the course environment |
-| `DASHBOARD_PASSWORD` | Password for the cookie session that protects every page and API route |
+| `DASHBOARD_PASSWORD` | Optional. When set, every page and API route requires this password (cookie session). When unset, the dashboard is open to anyone with the link. |
 
 With the `onboarding@resend.dev` sender and no verified domain, Resend only delivers to the address that owns the Resend account, so set `TEST_RECIPIENT_EMAIL` to that address. Any 403 is shown on the card with that explanation.
 
@@ -74,4 +74,4 @@ npm run lint    # includes the rule blocking lib/ai/* from importing pii-store o
 - **The AI never sees names.** Emails are drafted with `{{FIRST_NAME}}`; the real first name is substituted on the server at preview/send time. Sends are blocked if the final body still contains `{{`, `[NAME]` or `[REDACTED]`.
 - **Exports** omit email and phone unless "include contact details" is ticked.
 - **Gemini data use.** On the **free tier** of the Gemini API, Google may use submitted inputs and outputs to improve its products and models (and human reviewers may read them). On the **paid tier** (a billing-enabled Cloud project), Google does not use prompts or responses to improve its products. Even though CVs are PII-stripped before sending, use a billing-enabled key for real candidate data.
-- All pages and API routes require the dashboard password (an HMAC session cookie, checked in `proxy.ts` and again in each route handler).
+- Password protection is optional: set `DASHBOARD_PASSWORD` to require a password on every page and API route (an HMAC session cookie, checked in `proxy.ts` and again in each route handler). Without it, anyone with the URL can view candidates and press Send (which, in test mode, only reaches `TEST_RECIPIENT_EMAIL`).

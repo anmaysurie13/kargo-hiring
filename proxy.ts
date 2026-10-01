@@ -1,10 +1,10 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { isValidSession, SESSION_COOKIE } from "./lib/auth";
+import { authEnabled, isValidSession, SESSION_COOKIE } from "./lib/auth";
 
 export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
+  if (!authEnabled()) return pathname === "/login" ? NextResponse.redirect(new URL("/", req.url)) : NextResponse.next();
   if (pathname === "/login" || pathname === "/api/login") return NextResponse.next();
-  if (!process.env.DASHBOARD_PASSWORD) return new NextResponse("DASHBOARD_PASSWORD is not set; refusing to serve candidate data.", { status: 500 });
   if (await isValidSession(req.cookies.get(SESSION_COOKIE)?.value)) return NextResponse.next();
   if (pathname.startsWith("/api/")) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
   const url = new URL("/login", req.url);

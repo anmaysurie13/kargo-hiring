@@ -55,6 +55,31 @@ describe("separatePII on fixture CVs", () => {
   });
 });
 
+describe("names hidden inside links and handles", () => {
+  const pii = { fullName: "Preetham Rao", email: null, phone: null };
+  it("removes leetcode / any domain.tld/path link (real CV regression)", () => {
+    const { content } = redact("Bengaluru  ·  leetcode.com/preethamrao  ·  kaggle.com/x", pii, "heading");
+    expect(content).not.toMatch(/preetham|leetcode|kaggle/i);
+    expect(() => assertNoPII(content, pii)).not.toThrow();
+  });
+  it("assertNoPII catches a joined name the redactor missed", () => {
+    expect(() => assertNoPII("handle: preethamrao", pii)).toThrow(PIILeakError);
+    expect(() => assertNoPII("handle: preetham.rao", pii)).toThrow(PIILeakError);
+  });
+  it("removes initial+surname handles like rdesai-dev", () => {
+    const p = { fullName: "Rohan Desai", email: null, phone: null };
+    const { content } = redact("Git: rdesai-dev, twitter @rohandesai99", p, "heading");
+    expect(content).not.toMatch(/desai|rohan/i);
+    expect(() => assertNoPII(content, p)).not.toThrow();
+  });
+  it("keeps tool and channel names that merely mention a site", () => {
+    const p = { fullName: "Rahul Bose", email: null, phone: null };
+    const { content } = redact("CI/CD (GitHub Actions) and LinkedIn campaigns; cut CAC 28%", p, "heading");
+    expect(content).toContain("GitHub Actions");
+    expect(content).toContain("LinkedIn campaigns");
+  });
+});
+
 describe("Indian phone formats", () => {
   const formats = ["+91 98204 37810", "+91-9820437810", "098204-37810", "9820437810", "91 98204 37810", "(+91) 98204-37810", "+91 22 2345 6789", "022-23456789"];
   for (const f of formats) {

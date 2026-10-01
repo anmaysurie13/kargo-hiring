@@ -3,6 +3,9 @@ import type { DraftStatus, DraftType, Role } from "./types";
 // Serializable shapes passed from server pages to client components. No email/phone ever.
 export type Breakdown = { criterionId: string; name: string; weight: number; score: number; points: number; reason: string };
 
+/** INTERVIEW = recommended invite (above the line or Arjun's override); REVIEW = below the line but strong for the other role; PASS = rest. */
+export type Tier = "INTERVIEW" | "REVIEW" | "PASS";
+
 export type CardData = {
   id: string;
   rank: number;
@@ -13,6 +16,9 @@ export type CardData = {
   total: number;
   otherTotal: number | null;
   crossRole: Role | null;
+  recommendedRole: Role;
+  reroute: boolean;
+  tier: Tier;
   aboveLine: boolean;
   desiredType: DraftType;
   override: DraftType | null;

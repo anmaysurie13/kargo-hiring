@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
-import { Inter, JetBrains_Mono } from "next/font/google";
+import { Geist_Mono } from "next/font/google";
 import Link from "next/link";
 import { Nav } from "@/components/Nav";
+import { authEnabled } from "@/lib/auth";
 import "./globals.css";
 
-const inter = Inter({ variable: "--font-inter", subsets: ["latin"] });
-const mono = JetBrains_Mono({ variable: "--font-mono", subsets: ["latin"] });
+const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: "Kargo Hiring Dashboard",
@@ -15,19 +15,20 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className={`${inter.variable} ${mono.variable} antialiased`}>
-      <body className="min-h-screen font-sans">
-        <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/90 backdrop-blur">
-          <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4">
-            <Link href="/" className="flex items-center gap-2">
-              <span className="grid h-7 w-7 place-items-center rounded-md bg-gradient-to-br from-indigo-500 to-violet-600 text-xs font-bold text-white">K</span>
-              <span className="font-semibold">Kargo</span>
-              <span className="text-slate-400">/ Hiring</span>
+    <html lang="en" className={`${geistMono.variable} h-full antialiased`}>
+      <body className="flex min-h-full flex-col">
+        <header className="sticky top-0 z-10 border-b border-slate-200 bg-white/80 backdrop-blur-sm">
+          <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-3">
+            <Link href="/" className="group flex items-center gap-2 font-semibold tracking-tight text-slate-900">
+              <span className="flex h-7 w-7 items-center justify-center rounded-md bg-gradient-to-br from-indigo-500 to-indigo-700 text-xs font-bold text-white transition-transform group-hover:scale-105">
+                K
+              </span>
+              Kargo <span className="font-normal text-slate-400">/ Hiring</span>
             </Link>
-            <Nav />
+            <Nav signOut={authEnabled()} />
           </div>
         </header>
-        <main className="mx-auto max-w-6xl px-4 py-6">{children}</main>
+        <main className="mx-auto w-full max-w-7xl flex-1 px-6 py-6">{children}</main>
       </body>
     </html>
   );
