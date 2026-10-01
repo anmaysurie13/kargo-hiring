@@ -1,0 +1,7 @@
+# Never upload local secrets; Vercel uses the env vars set in Project Settings.
+.env
+.env.*
+!.env.example
+.vercel
+node_modules
+.next
